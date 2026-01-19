@@ -9,15 +9,23 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "next": "16.1.1",
-    "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "@clerk/nextjs": "^6.36.5",
+    "@prisma/client": "^5.22.0",
+    "framer-motion": "^12.23.26",
+    "lucide-react": "^0.562.0",
+    "nanoid": "^5.1.6",
+    "next": "15.5.9",
+    "prisma": "^5.22.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "svix": "^1.84.1",
+    "zod": "^4.3.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/react": "^18.3.27",
+    "@types/react-dom": "^18.3.7",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
     "tailwindcss": "^4",

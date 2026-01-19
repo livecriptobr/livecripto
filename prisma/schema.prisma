@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PaymentProvider {
+  MERCADOPAGO
+  OPENPIX
+  COINSNAP
+}
+
+enum DonationStatus {
+  CREATED
+  PENDING
+  PAID
+  FAILED
+  EXPIRED
+  REFUNDED
+}
+
+enum AlertStatus {
+  QUEUED
+  LOCKED
+  READY
+  PLAYING
+  DONE
+  SKIPPED
+}
+
+enum WithdrawStatus {
+  REQUESTED
+  PROCESSING
+  PAID
+  REJECTED
+}
+
+enum LedgerType {
+  CREDIT
+  DEBIT
+}
+
+enum LedgerSource {
+  DONATION
+  WITHDRAW
+  ADJUSTMENT
+}
+
+model User {
+  id                    String    @id @default(cuid())
+  clerkUserId           String    @unique
+  email                 String
+  username              String    @unique
+  displayName           String?
+  overlayToken          String
+  overlayTokenUpdatedAt DateTime  @default(now())
+  pixKey                String?
+  lightningAddress      String?
+  alertSettings         Json      @default("{}")
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  donations        Donation[]
+  alerts           Alert[]
+  withdrawRequests WithdrawRequest[]
+  ledgerEntries    Ledger[]
+}
+
+model Donation {
+  id                String          @id @default(cuid())
+  userId            String
+  donorName         String
+  message           String
+  amountCents       Int
+  currency          String          @default("BRL")
+  paymentProvider   PaymentProvider
+  providerPaymentId String?
+  status            DonationStatus  @default(CREATED)
+  createdAt         DateTime        @default(now())
+  paidAt            DateTime?
+
+  user   User    @relation(fields: [userId], references: [id])
+  alerts Alert[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Alert {
+  id            String      @id @default(cuid())
+  userId        String
+  donationId    String
+  status        AlertStatus @default(QUEUED)
+  audioUrl      String?
+  lockExpiresAt DateTime?
+  createdAt     DateTime    @default(now())
+  readyAt       DateTime?
+  consumedAt    DateTime?
+  lastError     String?
+
+  user     User     @relation(fields: [userId], references: [id])
+  donation Donation @relation(fields: [donationId], references: [id])
+
+  @@index([userId, status])
+}
+
+model WithdrawRequest {
+  id                  String         @id @default(cuid())
+  userId              String
+  method              String
+  amountCents         Int
+  destinationSnapshot String
+  status              WithdrawStatus @default(REQUESTED)
+  createdAt           DateTime       @default(now())
+  processedAt         DateTime?
+  auditNotes          String?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  provider    String
+  eventKey    String   @unique
+  payloadHash String
+  receivedAt  DateTime @default(now())
+  processedAt DateTime?
+  status      String   @default("PENDING")
+  error       String?
+
+  @@index([provider, eventKey])
+}
+
+model Ledger {
+  id          String       @id @default(cuid())
+  userId      String
+  type        LedgerType
+  source      LedgerSource
+  amountCents Int
+  referenceId String
+  createdAt   DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
