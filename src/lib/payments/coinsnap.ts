@@ -1,3 +1,5 @@
+import crypto from 'crypto'
+
 const COINSNAP_URL = 'https://app.coinsnap.io/api/v1'
 
 export interface CoinsnapInvoice {
@@ -55,7 +57,6 @@ export async function createLightningInvoice(params: CoinsnapInvoice): Promise<{
 }
 
 export function validateCoinsnapSignature(payload: string, signature: string): boolean {
-  const crypto = require('crypto')
   const secret = process.env.COINSNAP_WEBHOOK_SECRET
   if (!secret) return false
 

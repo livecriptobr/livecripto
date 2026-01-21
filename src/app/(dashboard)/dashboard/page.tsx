@@ -3,6 +3,15 @@ import { redirect } from 'next/navigation'
 import { userService } from '@/services/user.service'
 import { UserButton } from '@clerk/nextjs'
 
+interface AlertSettings {
+  minAmountCents?: number
+  ttsEnabled?: boolean
+  ttsVoice?: string
+  ttsTemplate?: string
+  durationMs?: number
+  blockedWords?: string[]
+}
+
 export default async function DashboardPage() {
   const { userId } = await auth()
   if (!userId) redirect('/sign-in')
@@ -15,6 +24,7 @@ export default async function DashboardPage() {
   )
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const alertSettings = user.alertSettings as AlertSettings | null
 
   return (
     <div className="space-y-8">
@@ -73,7 +83,7 @@ export default async function DashboardPage() {
           <div>
             <dt className="text-sm text-zinc-500">Doacao minima</dt>
             <dd className="text-lg font-medium">
-              R$ {((user.alertSettings as any)?.minAmountCents || 100) / 100}
+              R$ {(alertSettings?.minAmountCents || 100) / 100}
             </dd>
           </div>
         </dl>

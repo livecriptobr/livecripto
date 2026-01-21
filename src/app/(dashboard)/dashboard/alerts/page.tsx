@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Volume2, Save, Loader2 } from 'lucide-react'
+import { Save, Loader2 } from 'lucide-react'
 
 interface AlertSettings {
   minAmountCents: number
@@ -66,8 +66,9 @@ export default function AlertsPage() {
       if (!res.ok) throw new Error('Erro ao salvar')
 
       setMessage({ type: 'success', text: 'Configuracoes salvas!' })
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro desconhecido'
+      setMessage({ type: 'error', text: message })
     } finally {
       setSaving(false)
     }

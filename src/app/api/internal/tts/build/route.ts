@@ -28,7 +28,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Alert not found' }, { status: 404 })
     }
 
-    const settings = alert.user.alertSettings as Record<string, any>
+    interface AlertSettings {
+      ttsEnabled?: boolean
+      ttsTemplate?: string
+      ttsVoice?: string
+      blockedWords?: string[]
+    }
+    const settings = alert.user.alertSettings as AlertSettings | null
 
     // Check if TTS is disabled
     if (!settings?.ttsEnabled) {

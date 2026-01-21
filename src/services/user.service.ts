@@ -1,6 +1,15 @@
 import { prisma } from '@/lib/db'
 import { normalizeUsername, generateRandomSuffix, generateOverlayToken } from '@/lib/username'
 
+interface AlertSettings {
+  minAmountCents?: number
+  ttsEnabled?: boolean
+  ttsVoice?: string
+  ttsTemplate?: string
+  durationMs?: number
+  blockedWords?: string[]
+}
+
 export const userService = {
   async getOrCreateUser(clerkUserId: string, email: string, name?: string) {
     // Check if exists
@@ -79,9 +88,9 @@ export const userService = {
     })
   },
 
-  async updateAlertSettings(userId: string, settings: Record<string, any>) {
+  async updateAlertSettings(userId: string, settings: AlertSettings) {
     const user = await prisma.user.findUnique({ where: { id: userId } })
-    const current = (user?.alertSettings as Record<string, any>) || {}
+    const current = (user?.alertSettings as AlertSettings) || {}
 
     return prisma.user.update({
       where: { id: userId },

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db'
+import { Alert } from '@prisma/client'
 
 export const alertService = {
   async getNextReadyAlert(userId: string) {
@@ -6,7 +7,7 @@ export const alertService = {
     const lockDuration = 60 * 1000 // 60 seconds
 
     // Use raw query for atomic lock
-    const alerts = await prisma.$queryRaw<any[]>`
+    const alerts = await prisma.$queryRaw<Alert[]>`
       UPDATE "Alert"
       SET
         status = 'LOCKED',

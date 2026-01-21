@@ -30,7 +30,10 @@ export async function GET(req: NextRequest) {
     select: { donorName: true, amountCents: true, message: true },
   })
 
-  const settings = user.alertSettings as Record<string, any>
+  interface AlertSettings {
+    durationMs?: number
+  }
+  const settings = user.alertSettings as AlertSettings | null
 
   return NextResponse.json({
     alert: {

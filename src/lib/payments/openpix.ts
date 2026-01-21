@@ -1,3 +1,5 @@
+import crypto from 'crypto'
+
 const OPENPIX_URL = 'https://api.openpix.com.br/api/v1'
 
 export interface OpenPixCharge {
@@ -54,7 +56,6 @@ export async function createPixCharge(params: OpenPixCharge): Promise<{
 }
 
 export function validateOpenPixSignature(payload: string, signature: string): boolean {
-  const crypto = require('crypto')
   const secret = process.env.OPENPIX_WEBHOOK_SECRET
   if (!secret) return false
 

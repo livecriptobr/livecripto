@@ -11,6 +11,7 @@ enum PaymentProvider {
   MERCADOPAGO
   OPENPIX
   COINSNAP
+  NOWPAYMENTS
 }
 
 enum DonationStatus {

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 
 export class ApiError extends Error {
+  retryAfter?: number
+
   constructor(
     message: string,
     public statusCode: number = 500,
@@ -28,16 +30,22 @@ export class ApiError extends Error {
 
   static tooManyRequests(retryAfter?: number) {
     const error = new ApiError('Muitas requisicoes', 429, 'TOO_MANY_REQUESTS')
-    ;(error as any).retryAfter = retryAfter
+    error.retryAfter = retryAfter
     return error
   }
 }
 
+interface ErrorResponse {
+  error: string
+  code?: string
+  retryAfter?: number
+}
+
 export function handleApiError(error: unknown): NextResponse {
   if (error instanceof ApiError) {
-    const response: any = { error: error.message, code: error.code }
-    if ((error as any).retryAfter) {
-      response.retryAfter = (error as any).retryAfter
+    const response: ErrorResponse = { error: error.message, code: error.code }
+    if (error.retryAfter) {
+      response.retryAfter = error.retryAfter
     }
     return NextResponse.json(response, { status: error.statusCode })
   }

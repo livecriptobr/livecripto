@@ -38,8 +38,9 @@ export default function ProfilePage() {
 
       setOriginalUsername(username)
       setMessage({ type: 'success', text: 'Perfil atualizado!' })
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro desconhecido'
+      setMessage({ type: 'error', text: message })
     } finally {
       setSaving(false)
     }
