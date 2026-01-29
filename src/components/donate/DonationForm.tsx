@@ -4,11 +4,70 @@ import { useState } from 'react'
 import { Zap, CreditCard, QrCode, Loader2 } from 'lucide-react'
 import PixPayment from './PixPayment'
 import LightningPayment from './LightningPayment'
+import VoiceRecorder from '@/components/donation/VoiceRecorder'
+import GifSelector from '@/components/donation/GifSelector'
+
+interface PollOptionData {
+  id: string
+  text: string
+  color: string
+}
+
+interface ActivePollData {
+  id: string
+  title: string
+  voteType: 'UNIQUE' | 'WEIGHTED'
+  options: PollOptionData[]
+}
+
+interface IncentiveSettingsData {
+  voiceMessagesEnabled: boolean
+  voiceMessageMaxSecs: number
+  mediaEnabled: boolean
+  mediaGifsOnly: boolean
+  minAmountForVoice: number
+  minAmountForMedia: number
+}
+
+interface GifItem {
+  id: string
+  url: string
+  previewUrl: string
+  width: number
+  height: number
+}
+
+interface GoalRewardData {
+  id: string
+  title: string
+  description: string | null
+  thresholdCents: number
+  type: string
+}
+
+interface GoalData {
+  id: string
+  title: string
+  description: string | null
+  targetCents: number
+  currentCents: number
+  type: string
+  charityName: string | null
+  charityPercent: number | null
+  deadline: string | null
+  imageUrl: string | null
+  rewards: GoalRewardData[]
+  contributionCount: number
+}
 
 interface Props {
   username: string
   displayName: string
   minAmountCents: number
+  primaryColor?: string
+  activePoll?: ActivePollData | null
+  incentiveSettings?: IncentiveSettingsData | null
+  goals?: GoalData[]
 }
 
 type PaymentMethod = 'pix' | 'card' | 'lightning'
@@ -23,7 +82,7 @@ interface PaymentData {
   redirectUrl?: string
 }
 
-export default function DonationForm({ username, displayName, minAmountCents }: Props) {
+export default function DonationForm({ username, displayName, minAmountCents, primaryColor, activePoll, incentiveSettings, goals }: Props) {
   const [amount, setAmount] = useState('')
   const [donorName, setDonorName] = useState('')
   const [message, setMessage] = useState('')
@@ -31,6 +90,10 @@ export default function DonationForm({ username, displayName, minAmountCents }: 
   const [state, setState] = useState<FormState>('form')
   const [paymentData, setPaymentData] = useState<PaymentData | null>(null)
   const [error, setError] = useState('')
+  const [selectedPollOption, setSelectedPollOption] = useState<string | null>(null)
+  const [voiceMessageUrl, setVoiceMessageUrl] = useState<string | null>(null)
+  const [selectedGif, setSelectedGif] = useState<GifItem | null>(null)
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null)
 
   const amountCents = Math.round(parseFloat(amount.replace(',', '.') || '0') * 100)
   const isValid = amountCents >= minAmountCents && donorName.trim() && message.trim()
@@ -52,6 +115,10 @@ export default function DonationForm({ username, displayName, minAmountCents }: 
           donorName: donorName.trim(),
           message: message.trim(),
           method,
+          voiceMessageUrl,
+          mediaUrl: selectedGif?.url || null,
+          mediaType: selectedGif ? 'gif' : null,
+          goalId: selectedGoalId || undefined,
         }),
       })
 
@@ -62,6 +129,23 @@ export default function DonationForm({ username, displayName, minAmountCents }: 
       }
 
       setPaymentData(data)
+
+      // Vote on poll if option selected
+      if (selectedPollOption && activePoll && data.donationId) {
+        try {
+          await fetch(`/api/polls/${activePoll.id}/vote`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              optionId: selectedPollOption,
+              voterName: donorName.trim(),
+              donationId: activePoll.voteType === 'WEIGHTED' ? data.donationId : undefined,
+            }),
+          })
+        } catch {
+          // vote failure should not block donation flow
+        }
+      }
 
       if (method === 'card' && data.redirectUrl) {
         window.location.href = data.redirectUrl
@@ -143,6 +227,110 @@ export default function DonationForm({ username, displayName, minAmountCents }: 
           />
         </div>
 
+        {/* Voice Recorder */}
+        {incentiveSettings?.voiceMessagesEnabled && amountCents >= incentiveSettings.minAmountForVoice && (
+          <VoiceRecorder
+            maxDuration={incentiveSettings.voiceMessageMaxSecs}
+            onRecorded={(url) => setVoiceMessageUrl(url)}
+            onRemove={() => setVoiceMessageUrl(null)}
+            existingUrl={voiceMessageUrl}
+          />
+        )}
+
+        {/* GIF Selector */}
+        {incentiveSettings?.mediaEnabled && amountCents >= incentiveSettings.minAmountForMedia && (
+          <GifSelector
+            onSelect={(gif) => setSelectedGif(gif)}
+            onRemove={() => setSelectedGif(null)}
+            selectedGif={selectedGif}
+          />
+        )}
+
+        {/* Goals */}
+        {goals && goals.length > 0 && (
+          <div>
+            <label className="block text-sm text-zinc-400 mb-2">Contribuir para uma meta</label>
+            <div className="space-y-2">
+              {goals.map(goal => {
+                const progress = goal.targetCents > 0 ? Math.min(100, Math.round((goal.currentCents / goal.targetCents) * 100)) : 0
+                const qualifyingRewards = goal.rewards.filter(r => r.thresholdCents <= amountCents)
+                return (
+                  <button
+                    key={goal.id}
+                    type="button"
+                    onClick={() => setSelectedGoalId(selectedGoalId === goal.id ? null : goal.id)}
+                    className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                      selectedGoalId === goal.id
+                        ? 'border-purple-500 bg-purple-600/10'
+                        : 'border-zinc-700 bg-zinc-800 hover:border-zinc-600'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium text-white">{goal.title}</span>
+                      {goal.type === 'charity' && (
+                        <span className="text-xs text-pink-400">{goal.charityName}</span>
+                      )}
+                    </div>
+                    <div className="h-2 bg-zinc-700 rounded-full overflow-hidden mb-1">
+                      <div
+                        className="h-full bg-purple-500 rounded-full transition-all"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-zinc-500">
+                      <span>{progress}% - R$ {(goal.currentCents / 100).toFixed(2)}</span>
+                      <span>Meta: R$ {(goal.targetCents / 100).toFixed(2)}</span>
+                    </div>
+                    {selectedGoalId === goal.id && qualifyingRewards.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-zinc-700 space-y-1">
+                        <p className="text-xs text-purple-400 font-medium">Recompensas desbloqueadas:</p>
+                        {qualifyingRewards.map(r => (
+                          <p key={r.id} className="text-xs text-zinc-300 flex items-center gap-1">
+                            <span className="text-green-400">&#10003;</span> {r.title}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                    {selectedGoalId === goal.id && (
+                      <span className="text-xs text-purple-400 mt-1 block">Selecionado</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Enquete ativa */}
+        {activePoll && (
+          <div>
+            <label className="block text-sm text-zinc-400 mb-2">{activePoll.title}</label>
+            <div className="space-y-2">
+              {activePoll.options.map(opt => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setSelectedPollOption(selectedPollOption === opt.id ? null : opt.id)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left ${
+                    selectedPollOption === opt.id
+                      ? 'border-purple-500 bg-purple-600/10'
+                      : 'border-zinc-700 bg-zinc-800 hover:border-zinc-600'
+                  }`}
+                >
+                  <div
+                    className="w-4 h-4 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: opt.color }}
+                  />
+                  <span className="text-sm text-white">{opt.text}</span>
+                  {selectedPollOption === opt.id && (
+                    <span className="ml-auto text-purple-400 text-xs">Selecionado</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Metodo de pagamento */}
         <div>
           <label className="block text-sm text-zinc-400 mb-2">Forma de pagamento</label>
@@ -195,7 +383,13 @@ export default function DonationForm({ username, displayName, minAmountCents }: 
         <button
           type="submit"
           disabled={!isValid || state === 'processing'}
-          className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-zinc-700 disabled:cursor-not-allowed py-4 rounded-lg font-semibold text-white transition-colors flex items-center justify-center gap-2"
+          className="w-full disabled:bg-zinc-700 disabled:cursor-not-allowed py-4 rounded-lg font-semibold text-white transition-colors flex items-center justify-center gap-2"
+          style={{
+            backgroundColor: primaryColor || '#8B5CF6',
+            ...(primaryColor ? {} : {}),
+          }}
+          onMouseEnter={e => { if (primaryColor) (e.currentTarget.style.opacity = '0.9') }}
+          onMouseLeave={e => { if (primaryColor) (e.currentTarget.style.opacity = '1') }}
         >
           {state === 'processing' ? (
             <>

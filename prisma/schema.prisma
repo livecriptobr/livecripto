@@ -61,13 +61,38 @@ model User {
   pixKey                String?
   lightningAddress      String?
   alertSettings         Json      @default("{}")
+  avatarUrl             String?
+  primaryColor          String?   @default("#8B5CF6")
+  backgroundColor       String?   @default("#0F0A1E")
+  backgroundImageUrl    String?
+  bio                   String?
+  socialLinks           Json?
+  donationPageTitle     String?
+  thankYouMessage       String?
+  phone                 String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  donations        Donation[]
-  alerts           Alert[]
-  withdrawRequests WithdrawRequest[]
-  ledgerEntries    Ledger[]
+  isVerified        Boolean  @default(false)
+  verificationLevel String   @default("none")
+
+  donations          Donation[]
+  alerts             Alert[]
+  withdrawRequests   WithdrawRequest[]
+  ledgerEntries      Ledger[]
+  notifications      Notification[]
+  transactions       Transaction[] @relation("UserTransactions")
+  bankAccounts       BankAccount[]
+  polls              Poll[]
+  widgets            Widget[]
+  alertTiers         AlertTier[]
+  incentiveSettings  IncentiveSettings?
+  moderationSettings ModerationSettings?
+  apiKeys            ApiKey[]
+  moderationLogs     ModerationLog[]
+  blockedDonors      BlockedDonor[]
+  verifications      Verification[]
+  goals              Goal[]
 }
 
 model Donation {
@@ -83,8 +108,18 @@ model Donation {
   createdAt         DateTime        @default(now())
   paidAt            DateTime?
 
-  user   User    @relation(fields: [userId], references: [id])
-  alerts Alert[]
+  voiceMessageUrl  String?
+  mediaUrl         String?
+  mediaType        String?
+  pollVoteOptionId String?
+
+  goalId    String?
+  goal      Goal?      @relation(fields: [goalId], references: [id])
+
+  user      User       @relation(fields: [userId], references: [id])
+  alerts    Alert[]
+  pollVotes PollVote[]
+  goalContributions GoalContribution[]
 
   @@index([userId])
   @@index([status])
@@ -149,4 +184,354 @@ model Ledger {
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  isRead    Boolean  @default(false)
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+}
+
+model Transaction {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation("UserTransactions", fields: [userId], references: [id], onDelete: Cascade)
+  type          String   // "donation_received" | "withdrawal" | "fee" | "refund"
+  status        String   @default("completed")
+  amountCents   Int
+  feeCents      Int      @default(0)
+  netCents      Int
+  balanceCents  Int
+  description   String?
+  referenceId   String?
+  referenceType String?
+  paymentMethod String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, createdAt])
+}
+
+model BankAccount {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pixKeyType String
+  pixKey     String
+  label      String?
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+enum PollVoteType {
+  UNIQUE
+  WEIGHTED
+}
+
+enum PollStatus {
+  ACTIVE
+  PAUSED
+  CLOSED
+}
+
+model Poll {
+  id            String       @id @default(cuid())
+  userId        String
+  title         String
+  voteType      PollVoteType @default(UNIQUE)
+  status        PollStatus   @default(ACTIVE)
+  expiresAt     DateTime?
+  showOnOverlay Boolean      @default(true)
+  totalVotes    Int          @default(0)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  options PollOption[]
+  votes   PollVote[]
+
+  @@index([userId])
+  @@index([userId, status])
+}
+
+model PollOption {
+  id         String @id @default(cuid())
+  pollId     String
+  text       String
+  color      String @default("#8B5CF6")
+  voteCount  Int    @default(0)
+  voteWeight Int    @default(0)
+  sortOrder  Int    @default(0)
+
+  poll  Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes PollVote[]
+
+  @@index([pollId])
+}
+
+model PollVote {
+  id          String   @id @default(cuid())
+  pollId      String
+  optionId    String
+  donationId  String?
+  voterName   String
+  voterIpHash String?
+  weight      Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  poll     Poll        @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option   PollOption  @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  donation Donation?   @relation(fields: [donationId], references: [id])
+
+  @@index([pollId])
+  @@index([pollId, voterIpHash])
+}
+
+model Widget {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  name      String
+  token     String   @unique @default(cuid())
+  config    Json     @default("{}")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  marathonTimer MarathonTimer?
+
+  @@index([userId])
+  @@index([token])
+}
+
+model MarathonTimer {
+  id               String    @id @default(cuid())
+  widgetId         String    @unique
+  widget           Widget    @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+  userId           String
+  endsAt           DateTime
+  baseMinutes      Int       @default(60)
+  addMinutesPer    Int       @default(1)
+  addThreshold     Int       @default(500)
+  maxHours         Int       @default(24)
+  isPaused         Boolean   @default(false)
+  pausedAt         DateTime?
+  remainingOnPause Int?
+
+  @@index([userId])
+}
+
+model AlertTier {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  minAmountCents Int
+  name           String
+  color          String   @default("#8B5CF6")
+  soundUrl       String?
+  animationType  String   @default("fadeIn")
+  duration       Int      @default(5)
+  ttsVoice       String?
+  ttsSpeed       Float    @default(1.0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, minAmountCents])
+  @@index([userId])
+}
+
+model IncentiveSettings {
+  id                    String  @id @default(cuid())
+  userId                String  @unique
+  user                  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  voiceMessagesEnabled  Boolean @default(false)
+  voiceMessageMaxSecs   Int     @default(15)
+  mediaEnabled          Boolean @default(false)
+  mediaGifsOnly         Boolean @default(true)
+  ttsEnabled            Boolean @default(false)
+  ttsDefaultVoice       String  @default("pt-BR-FranciscaNeural")
+  ttsDefaultSpeed       Float   @default(1.0)
+  minAmountForVoice     Int     @default(500)
+  minAmountForMedia     Int     @default(500)
+  minAmountForTts       Int     @default(100)
+}
+
+model ModerationSettings {
+  id                       String  @id @default(cuid())
+  userId                   String  @unique
+  user                     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  blockedWordsEnabled      Boolean @default(false)
+  blockedWords             Json    @default("[]")
+  blockedWordsRegex        Json    @default("[]")
+  useDefaultProfanityList  Boolean @default(true)
+  gptModerationEnabled     Boolean @default(false)
+  gptBlockHate             Boolean @default(true)
+  gptBlockSexual           Boolean @default(true)
+  gptBlockViolence         Boolean @default(true)
+  gptBlockSelfHarm         Boolean @default(true)
+  gptBlockThreatening      Boolean @default(true)
+  gptBlockHarassment       Boolean @default(true)
+  gptSensitivity           Float   @default(0.7)
+  audioModerationEnabled   Boolean @default(false)
+  imageModerationEnabled   Boolean @default(false)
+  autoBlockRepeatOffenders Boolean @default(false)
+  repeatOffenderThreshold  Int     @default(3)
+}
+
+model ModerationLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  donationId  String?
+  donorName   String
+  donorIpHash String?
+  content     String   @db.Text
+  contentType String
+  reason      String
+  category    String?
+  action      String
+  details     Json?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([userId, contentType])
+}
+
+model BlockedDonor {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  donorIpHash String
+  donorName   String?
+  reason      String?
+  blockedAt   DateTime @default(now())
+
+  @@unique([userId, donorIpHash])
+  @@index([userId])
+}
+
+model Verification {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type            String    // "identity" | "twitch" | "youtube" | "instagram"
+  status          String    @default("pending") // "pending" | "reviewing" | "approved" | "rejected"
+  documentUrl     String?
+  documentBackUrl String?
+  selfieUrl       String?
+  externalId      String?
+  externalName    String?
+  rejectionReason String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  submittedAt     DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([userId, type])
+  @@index([userId])
+  @@index([status])
+}
+
+model ApiKey {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  keyHash   String
+  keyPrefix String
+  label     String    @default("StreamDeck")
+  lastUsed  DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([keyPrefix])
+}
+
+model Goal {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title           String
+  description     String?   @db.Text
+  targetCents     Int
+  currentCents    Int       @default(0)
+  imageUrl        String?
+  deadline        DateTime?
+  isActive        Boolean   @default(true)
+  showOnDonation  Boolean   @default(true)
+  showOnOverlay   Boolean   @default(true)
+  type            String    @default("personal")
+  charityName     String?
+  charityPercent  Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  rewards        GoalReward[]
+  contributions  GoalContribution[]
+  donations      Donation[]
+
+  @@index([userId])
+  @@index([userId, isActive])
+}
+
+model GoalContribution {
+  id          String   @id @default(cuid())
+  goalId      String
+  goal        Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  donationId  String
+  donation    Donation @relation(fields: [donationId], references: [id])
+  donorName   String
+  amountCents Int
+  createdAt   DateTime @default(now())
+
+  @@index([goalId])
+  @@index([donationId])
+}
+
+model GoalReward {
+  id             String   @id @default(cuid())
+  goalId         String
+  goal           Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  thresholdCents Int
+  type           String   @default("mention")
+  downloadUrl    String?
+  claimedCount   Int      @default(0)
+  maxClaims      Int?
+  isActive       Boolean  @default(true)
+  sortOrder      Int      @default(0)
+
+  claims RewardClaim[]
+
+  @@index([goalId])
+}
+
+model RewardClaim {
+  id         String   @id @default(cuid())
+  rewardId   String
+  reward     GoalReward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+  donationId String
+  donorName  String
+  donorEmail String?
+  status     String   @default("pending")
+  claimedAt  DateTime @default(now())
+
+  @@index([rewardId])
+  @@index([donationId])
 }
