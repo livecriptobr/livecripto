@@ -93,6 +93,8 @@ model User {
   blockedDonors      BlockedDonor[]
   verifications      Verification[]
   goals              Goal[]
+  receivables        Receivable[]
+  walletLimits       WalletLimits?
 }
 
 model Donation {
@@ -534,4 +536,31 @@ model RewardClaim {
 
   @@index([rewardId])
   @@index([donationId])
+}
+
+model Receivable {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  donationId    String
+  amountCents   Int
+  feeCents      Int       @default(0)
+  netCents      Int
+  status        String    @default("pending") // "pending" | "available" | "settled"
+  expectedDate  DateTime
+  settledAt     DateTime?
+  paymentMethod String    // "card"
+  createdAt     DateTime  @default(now())
+
+  @@index([userId])
+  @@index([userId, status])
+}
+
+model WalletLimits {
+  id                   String @id @default(cuid())
+  userId               String @unique
+  user                 User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dailyWithdrawLimit   Int    @default(500000)  // R$5.000,00
+  monthlyWithdrawLimit Int    @default(5000000) // R$50.000,00
+  minWithdrawAmount    Int    @default(1000)    // R$10,00
 }
