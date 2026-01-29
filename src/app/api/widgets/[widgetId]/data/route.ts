@@ -23,7 +23,7 @@ export async function GET(
   try {
     const widget = await prisma.widget.findFirst({
       where: { id: widgetId, token, isActive: true },
-      include: { marathonTimer: true },
+      include: { marathonTimer: true, user: { select: { username: true } } },
     })
 
     if (!widget) {
@@ -45,7 +45,20 @@ export async function GET(
           take: 5,
           select: { id: true, donorName: true, amountCents: true, message: true, paidAt: true },
         })
-        return NextResponse.json({ donations })
+        const alertTiers = await prisma.alertTier.findMany({
+          where: { userId: widget.userId, isActive: true },
+          orderBy: { minAmountCents: 'desc' },
+          select: {
+            id: true,
+            name: true,
+            minAmountCents: true,
+            color: true,
+            soundUrl: true,
+            animationType: true,
+            duration: true,
+          },
+        })
+        return NextResponse.json({ donations, alertTiers })
       }
 
       case 'ranking': {
@@ -124,6 +137,39 @@ export async function GET(
           }
         }).filter(d => d.videoId)
         return NextResponse.json({ queue })
+      }
+
+      case 'goal': {
+        const goalId = config.goalId as string | undefined
+        if (!goalId) {
+          return NextResponse.json({ error: 'Goal not configured' }, { status: 400 })
+        }
+        const goal = await prisma.goal.findFirst({
+          where: { id: goalId, userId: widget.userId },
+          include: { _count: { select: { contributions: true } } },
+        })
+        if (!goal) {
+          return NextResponse.json({ error: 'Goal not found' }, { status: 404 })
+        }
+        const percentage = goal.targetCents > 0
+          ? Math.min(100, Math.round((goal.currentCents / goal.targetCents) * 100))
+          : 0
+        return NextResponse.json({
+          goal: {
+            title: goal.title,
+            targetCents: goal.targetCents,
+            currentCents: goal.currentCents,
+            percentage,
+            contributorCount: goal._count.contributions,
+            isCompleted: goal.currentCents >= goal.targetCents,
+            type: goal.type,
+            charityName: goal.charityName,
+          },
+        })
+      }
+
+      case 'qrcode': {
+        return NextResponse.json({ username: widget.user.username })
       }
 
       default:

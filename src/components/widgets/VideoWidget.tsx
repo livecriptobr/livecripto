@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
+import type { ControlCommand } from '@/lib/control-commands'
 
 interface QueueItem {
   id: string
@@ -28,6 +29,10 @@ export default function VideoWidget({ widgetId, token, config }: VideoWidgetProp
   const playerRef = useRef<HTMLDivElement>(null)
   const ytPlayerRef = useRef<YT.Player | null>(null)
   const [playerReady, setPlayerReady] = useState(false)
+  const [, setAutoplay] = useState(true)
+  const [, setPaused] = useState(false)
+  const [muted, setMuted] = useState(false)
+  const [volume, setVolume] = useState(80)
 
   // Fetch queue
   useEffect(() => {
@@ -96,6 +101,74 @@ export default function VideoWidget({ widgetId, token, config }: VideoWidgetProp
     if (!item) return
     playVideo(item.videoId)
   }, [currentIndex, queue, playerReady, playVideo])
+
+  // SSE control stream
+  useEffect(() => {
+    const es = new EventSource(`/api/controls/stream?token=${token}`)
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data) as { type?: string; command?: ControlCommand }
+        if (data.type === 'init') return
+        const cmd = data.command
+        if (!cmd || cmd.section !== 'video') return
+
+        switch (cmd.action) {
+          case 'toggle_autoplay':
+            setAutoplay(prev => !prev)
+            break
+          case 'pause':
+            setPaused(true)
+            ytPlayerRef.current?.pauseVideo?.()
+            break
+          case 'resume':
+            setPaused(false)
+            ytPlayerRef.current?.playVideo?.()
+            break
+          case 'skip':
+            setCurrentIndex(prev => prev + 1)
+            break
+          case 'mute':
+            setMuted(true)
+            ytPlayerRef.current?.mute?.()
+            break
+          case 'unmute':
+            setMuted(false)
+            ytPlayerRef.current?.unMute?.()
+            break
+          case 'volume_up':
+            setVolume(prev => {
+              const v = Math.min(100, prev + 10)
+              ytPlayerRef.current?.setVolume?.(v)
+              return v
+            })
+            break
+          case 'volume_down':
+            setVolume(prev => {
+              const v = Math.max(0, prev - 10)
+              ytPlayerRef.current?.setVolume?.(v)
+              return v
+            })
+            break
+          case 'clear_queue':
+            setQueue([])
+            setCurrentIndex(0)
+            break
+        }
+      } catch { /* silent */ }
+    }
+
+    return () => es.close()
+  }, [token])
+
+  // Sync volume/mute to player
+  useEffect(() => {
+    if (ytPlayerRef.current) {
+      ytPlayerRef.current.setVolume?.(volume)
+      if (muted) ytPlayerRef.current.mute?.()
+      else ytPlayerRef.current.unMute?.()
+    }
+  }, [volume, muted])
 
   const current = queue[currentIndex]
 

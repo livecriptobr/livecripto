@@ -119,6 +119,7 @@ export default function DonationForm({ username, displayName, minAmountCents, pr
           mediaUrl: selectedGif?.url || null,
           mediaType: selectedGif ? 'gif' : null,
           goalId: selectedGoalId || undefined,
+          pollOptionId: selectedPollOption || undefined,
         }),
       })
 
@@ -130,22 +131,7 @@ export default function DonationForm({ username, displayName, minAmountCents, pr
 
       setPaymentData(data)
 
-      // Vote on poll if option selected
-      if (selectedPollOption && activePoll && data.donationId) {
-        try {
-          await fetch(`/api/polls/${activePoll.id}/vote`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              optionId: selectedPollOption,
-              voterName: donorName.trim(),
-              donationId: activePoll.voteType === 'WEIGHTED' ? data.donationId : undefined,
-            }),
-          })
-        } catch {
-          // vote failure should not block donation flow
-        }
-      }
+      // Poll vote is now handled server-side in handleDonationPaid
 
       if (method === 'card' && data.redirectUrl) {
         window.location.href = data.redirectUrl

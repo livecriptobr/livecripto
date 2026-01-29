@@ -7,6 +7,10 @@ import { createPixCharge } from '@/lib/payments/openpix'
 import { createLightningInvoice } from '@/lib/payments/coinsnap'
 import { createCheckoutPreference } from '@/lib/payments/mercadopago'
 import { convertBrlToUsd } from '@/lib/payments/currency'
+import { moderateDonation } from '@/services/moderation'
+import { createLogger } from '@/lib/logger'
+
+const logger = createLogger({ action: 'donate-init' })
 
 // Check if real providers are configured
 const USE_REAL_OPENPIX = !!process.env.OPENPIX_APP_ID
@@ -27,7 +31,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { username, amountCents, donorName, message, method } = parsed.data
+    const { username, amountCents, donorName, message, method, voiceMessageUrl, mediaUrl, mediaType, goalId, pollOptionId } = parsed.data
 
     // Rate limit
     const rateLimitKey = `donate:${ip}:${username}`
@@ -57,11 +61,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Valor abaixo do minimo' }, { status: 400 })
     }
 
-    // Sanitize and check blacklist
+    // Sanitize message
     const sanitizedMessage = sanitizeMessage(message)
-    const blockedWords = (settings?.blockedWords as string[]) || []
-    if (containsBlockedWord(sanitizedMessage, blockedWords)) {
-      return NextResponse.json({ error: 'Mensagem contem palavras bloqueadas' }, { status: 400 })
+
+    // Run moderation pipeline
+    try {
+      const moderationResult = await moderateDonation({
+        userId: user.id,
+        donorName,
+        donorIp: ip,
+        text: sanitizedMessage,
+        audioUrl: voiceMessageUrl ?? undefined,
+        imageUrl: mediaUrl ?? undefined,
+      })
+
+      if (!moderationResult.allowed) {
+        logger.info('Donation blocked by moderation', { reason: moderationResult.reason })
+        return NextResponse.json({ error: 'Mensagem nao permitida' }, { status: 400 })
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro'
+      logger.error('Moderation service failed, falling back to blocklist', { error: msg })
+      // Fallback to simple blocklist check
+      const blockedWords = (settings?.blockedWords as string[]) || []
+      if (containsBlockedWord(sanitizedMessage, blockedWords)) {
+        return NextResponse.json({ error: 'Mensagem contem palavras bloqueadas' }, { status: 400 })
+      }
     }
 
     // Map method to provider
@@ -80,6 +105,11 @@ export async function POST(req: NextRequest) {
         amountCents,
         paymentProvider: providerMap[method],
         status: 'CREATED',
+        voiceMessageUrl: voiceMessageUrl ?? null,
+        mediaUrl: mediaUrl ?? null,
+        mediaType: mediaType ?? null,
+        goalId: goalId ?? null,
+        pollVoteOptionId: pollOptionId ?? null,
       },
     })
 

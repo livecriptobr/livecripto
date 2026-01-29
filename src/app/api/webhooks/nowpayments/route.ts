@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { prisma } from '@/lib/db';
-import { DonationStatus, LedgerType, LedgerSource } from '@prisma/client';
+import { DonationStatus } from '@prisma/client';
 import { createLogger } from '@/lib/logger';
 import { processWebhookOnce } from '@/lib/webhook-idempotency';
 import { PaymentStatus, sortObject } from '@/lib/payments/nowpayments';
+import { handleDonationPaid, handleDonationFailed, handleDonationExpired } from '@/services/donation.service';
 
 const IPN_SECRET = process.env.NOWPAYMENTS_IPN_SECRET || '';
 
@@ -98,34 +99,18 @@ export async function POST(request: NextRequest) {
         }
 
         if (newStatus && donation.status !== newStatus) {
-          await prisma.donation.update({
-            where: { id: donation.id },
-            data: {
-              status: newStatus,
-              paidAt: newStatus === DonationStatus.PAID ? new Date() : null,
-            },
-          });
-
-          // If paid, create ledger entry and alert
           if (newStatus === DonationStatus.PAID) {
-            await prisma.ledger.create({
-              data: {
-                userId: donation.userId,
-                type: LedgerType.CREDIT,
-                source: LedgerSource.DONATION,
-                amountCents: donation.amountCents,
-                referenceId: donation.id,
-              },
+            await handleDonationPaid(donation.id);
+            logger.info(`Donation ${donation.id} paid via handleDonationPaid`);
+          } else if (newStatus === DonationStatus.FAILED) {
+            await handleDonationFailed(donation.id);
+          } else if (newStatus === DonationStatus.EXPIRED) {
+            await handleDonationExpired(donation.id);
+          } else {
+            await prisma.donation.update({
+              where: { id: donation.id },
+              data: { status: newStatus },
             });
-
-            await prisma.alert.create({
-              data: {
-                donationId: donation.id,
-                userId: donation.userId,
-              },
-            });
-
-            logger.info(`Donation ${donation.id} paid, alert created`);
           }
         }
       }
