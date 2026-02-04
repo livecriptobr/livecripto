@@ -28,12 +28,10 @@ export async function POST(req: NextRequest) {
 
     const signature = req.headers.get('x-webhook-signature') || ''
 
-    // Validate signature (skip if no secret configured)
-    if (process.env.OPENPIX_WEBHOOK_SECRET) {
-      if (!validateOpenPixSignature(rawBody, signature)) {
-        console.error('OpenPix webhook: Invalid signature')
-        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
-      }
+    // Validate RSA SHA-256 signature using OpenPix public key
+    if (!validateOpenPixSignature(rawBody, signature)) {
+      console.error('OpenPix webhook: Invalid signature')
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
     }
 
     const payload = JSON.parse(rawBody)
