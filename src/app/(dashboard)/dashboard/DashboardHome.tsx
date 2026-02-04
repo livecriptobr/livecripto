@@ -1,7 +1,8 @@
 'use client'
 
+import { useState, useCallback } from 'react'
 import useSWR from 'swr'
-import { DollarSign, TrendingUp, Calendar, Clock } from 'lucide-react'
+import { DollarSign, TrendingUp, Calendar, Clock, Copy, Check } from 'lucide-react'
 
 interface DashboardHomeProps {
   username: string
@@ -36,6 +37,14 @@ export default function DashboardHome({ username, overlayToken, appUrl }: Dashbo
     refreshInterval: 30000,
   })
 
+  const [copiedField, setCopiedField] = useState<string | null>(null)
+
+  const copyToClipboard = useCallback((text: string, field: string) => {
+    navigator.clipboard.writeText(text)
+    setCopiedField(field)
+    setTimeout(() => setCopiedField(null), 2000)
+  }, [])
+
   const stats = [
     { label: 'Total Recebido', value: data ? formatBRL(data.totalReceived) : '...', icon: <DollarSign size={20} />, color: 'text-green-400' },
     { label: 'Saldo Disponível', value: data ? formatBRL(data.balance) : '...', icon: <TrendingUp size={20} />, color: 'text-purple-400' },
@@ -63,16 +72,34 @@ export default function DashboardHome({ username, overlayToken, appUrl }: Dashbo
       {/* Quick links */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-800">
-          <h2 className="text-lg font-semibold text-zinc-300 mb-2">Seu link de doação</h2>
-          <code className="block bg-zinc-800 px-4 py-2 rounded-lg text-purple-400 text-sm break-all">
-            {appUrl}/{username}
-          </code>
+          <h2 className="text-lg font-semibold text-zinc-300 mb-3">Seu link de doação</h2>
+          <div className="flex items-center gap-2 bg-zinc-800 rounded-lg px-4 py-3">
+            <code className="text-purple-400 text-sm break-all flex-1 select-all">
+              {appUrl}/{username}
+            </code>
+            <button
+              onClick={() => copyToClipboard(`${appUrl}/${username}`, 'donate')}
+              className="flex-shrink-0 p-2 hover:bg-zinc-700 rounded-lg transition-colors"
+              title="Copiar link"
+            >
+              {copiedField === 'donate' ? <Check size={16} className="text-green-400" /> : <Copy size={16} className="text-zinc-400" />}
+            </button>
+          </div>
         </div>
         <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-800">
-          <h2 className="text-lg font-semibold text-zinc-300 mb-2">URL do Overlay (OBS)</h2>
-          <code className="block bg-zinc-800 px-4 py-2 rounded-lg text-green-400 text-sm break-all">
-            {appUrl}/overlay/{username}?token={overlayToken.slice(0, 8)}...
-          </code>
+          <h2 className="text-lg font-semibold text-zinc-300 mb-3">URL do Overlay (OBS)</h2>
+          <div className="flex items-center gap-2 bg-zinc-800 rounded-lg px-4 py-3">
+            <code className="text-green-400 text-sm break-all flex-1 select-all">
+              {appUrl}/overlay/{username}?token={overlayToken}
+            </code>
+            <button
+              onClick={() => copyToClipboard(`${appUrl}/overlay/${username}?token=${overlayToken}`, 'overlay')}
+              className="flex-shrink-0 p-2 hover:bg-zinc-700 rounded-lg transition-colors"
+              title="Copiar URL"
+            >
+              {copiedField === 'overlay' ? <Check size={16} className="text-green-400" /> : <Copy size={16} className="text-zinc-400" />}
+            </button>
+          </div>
         </div>
       </div>
 
