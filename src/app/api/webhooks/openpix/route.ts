@@ -11,12 +11,24 @@ import { handleDonationPaid } from '@/services/donation.service'
  * - OPENPIX:CHARGE_COMPLETED - Payment received successfully
  * - OPENPIX:CHARGE_EXPIRED - Charge expired without payment
  */
+
+// GET handler for webhook verification (OpenPix pings this to check the endpoint)
+export async function GET() {
+  return NextResponse.json({ ok: true })
+}
+
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text()
+
+    // Handle empty body (OpenPix test/ping request)
+    if (!rawBody || rawBody.trim() === '') {
+      return NextResponse.json({ received: true, test: true })
+    }
+
     const signature = req.headers.get('x-webhook-signature') || ''
 
-    // Validate signature (skip in dev if no secret configured)
+    // Validate signature (skip if no secret configured)
     if (process.env.OPENPIX_WEBHOOK_SECRET) {
       if (!validateOpenPixSignature(rawBody, signature)) {
         console.error('OpenPix webhook: Invalid signature')
@@ -29,9 +41,13 @@ export async function POST(req: NextRequest) {
     // Log the event for debugging
     console.log('OpenPix webhook received:', payload.event)
 
+    // Handle test event
+    if (payload.event === 'OPENPIX:WEBHOOK_TEST' || !payload.event) {
+      return NextResponse.json({ received: true, test: true })
+    }
+
     // Only process completed charges
     if (payload.event !== 'OPENPIX:CHARGE_COMPLETED') {
-      // Acknowledge other events without processing
       return NextResponse.json({ received: true, event: payload.event })
     }
 
@@ -60,11 +76,4 @@ export async function POST(req: NextRequest) {
     console.error('OpenPix webhook error:', error)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
-}
-
-// Disable body parsing since we need raw body for signature validation
-export const config = {
-  api: {
-    bodyParser: false,
-  },
 }
