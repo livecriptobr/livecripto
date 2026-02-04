@@ -295,11 +295,15 @@ export default function WidgetsPage() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-1.5">
-                  <button onClick={() => copyUrl(w)} className="flex items-center gap-1 px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs transition-colors" title="Copiar URL">
-                    {copiedId === w.id ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
-                    {copiedId === w.id ? 'Copiado!' : 'URL'}
+                {/* Overlay URL */}
+                <div className="flex items-center gap-2 bg-zinc-800 rounded-lg px-3 py-2">
+                  <code className="text-xs text-zinc-400 truncate flex-1 select-all">{`${typeof window !== 'undefined' ? window.location.origin : ''}/widget/${w.id}?token=${w.token}`}</code>
+                  <button onClick={() => copyUrl(w)} className="flex-shrink-0 p-1 hover:bg-zinc-700 rounded transition-colors" title="Copiar URL">
+                    {copiedId === w.id ? <Check size={14} className="text-green-400" /> : <Copy size={14} className="text-zinc-400" />}
                   </button>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
                   <button onClick={() => openEdit(w)} className="flex items-center gap-1 px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs transition-colors" title="Configurar">
                     <Settings size={12} /> Config
                   </button>
