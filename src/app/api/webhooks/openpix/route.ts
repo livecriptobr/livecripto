@@ -41,8 +41,8 @@ export async function POST(req: NextRequest) {
     // Log the event for debugging
     console.log('OpenPix webhook received:', payload.event)
 
-    // Handle test event
-    if (payload.event === 'OPENPIX:WEBHOOK_TEST' || !payload.event) {
+    // Handle test event (OpenPix sends evento: "teste_webhook" or missing charge data)
+    if (payload.evento === 'teste_webhook' || payload.event === 'OPENPIX:WEBHOOK_TEST' || !payload.event) {
       return NextResponse.json({ received: true, test: true })
     }
 
@@ -51,11 +51,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true, event: payload.event })
     }
 
-    // Extract correlation ID (our donation ID)
+    // Extract correlation ID (our donation ID) — if missing, it's a test ping
     const eventKey = payload.charge?.correlationID
     if (!eventKey) {
-      console.error('OpenPix webhook: Missing correlationID')
-      return NextResponse.json({ error: 'Missing correlationID' }, { status: 400 })
+      return NextResponse.json({ received: true, test: true })
     }
 
     // Process the webhook idempotently
