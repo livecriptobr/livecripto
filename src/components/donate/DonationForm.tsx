@@ -97,6 +97,7 @@ export default function DonationForm({ username, displayName, minAmountCents, pr
 
   const amountCents = Math.round(parseFloat(amount.replace(',', '.') || '0') * 100)
   const isValid = amountCents >= minAmountCents && donorName.trim() && message.trim()
+  const isDisabled = !isValid || state === 'processing'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -368,14 +369,11 @@ export default function DonationForm({ username, displayName, minAmountCents, pr
 
         <button
           type="submit"
-          disabled={!isValid || state === 'processing'}
-          className="w-full disabled:bg-zinc-700 disabled:cursor-not-allowed py-4 rounded-lg font-semibold text-white transition-colors flex items-center justify-center gap-2"
-          style={{
-            backgroundColor: primaryColor || '#8B5CF6',
-            ...(primaryColor ? {} : {}),
-          }}
-          onMouseEnter={e => { if (primaryColor) (e.currentTarget.style.opacity = '0.9') }}
-          onMouseLeave={e => { if (primaryColor) (e.currentTarget.style.opacity = '1') }}
+          disabled={isDisabled}
+          className={`w-full py-4 rounded-lg font-semibold text-white transition-colors flex items-center justify-center gap-2 ${
+            isDisabled ? 'bg-zinc-700 cursor-not-allowed opacity-50' : 'hover:opacity-90 active:opacity-80'
+          }`}
+          style={!isDisabled ? { backgroundColor: primaryColor || '#8B5CF6' } : undefined}
         >
           {state === 'processing' ? (
             <>
