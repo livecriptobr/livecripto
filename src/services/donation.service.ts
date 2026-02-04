@@ -1,25 +1,75 @@
 import { prisma } from '@/lib/db'
 import { createLogger } from '@/lib/logger'
+import { generateTTS, buildTTSText, applyBlacklist } from '@/lib/tts'
+import { uploadToBunny } from '@/lib/bunny'
 import { calculateFee, getPaymentMethodType } from '@/services/fees'
 import { recordTransaction } from '@/services/wallet'
 
 const logger = createLogger({ action: 'donation-service' })
 
-/**
- * Trigger TTS build for an alert (non-blocking).
- * Calls the internal TTS build API to generate audio.
- */
-async function triggerTTSBuild(alertId: string) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+interface AlertSettings {
+  ttsEnabled?: boolean
+  ttsTemplate?: string
+  ttsVoice?: string
+  blockedWords?: string[]
+}
 
-  await fetch(`${appUrl}/api/internal/tts/build`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.INTERNAL_API_SECRET}`,
+/**
+ * Build TTS audio for an alert directly (no HTTP self-call).
+ * Updates the alert status to READY when done.
+ */
+async function buildTTSForAlert(alertId: string) {
+  const alert = await prisma.alert.findUnique({
+    where: { id: alertId },
+    include: {
+      donation: true,
+      user: { select: { id: true, alertSettings: true } },
     },
-    body: JSON.stringify({ alertId }),
   })
+
+  if (!alert || !alert.donation) return
+
+  const settings = alert.user.alertSettings as AlertSettings | null
+
+  if (!settings?.ttsEnabled) {
+    await prisma.alert.update({
+      where: { id: alertId },
+      data: { status: 'READY', readyAt: new Date() },
+    })
+    return
+  }
+
+  try {
+    let text = buildTTSText(
+      settings.ttsTemplate || '{nome} doou {valor}. {mensagem}',
+      alert.donation
+    )
+    text = applyBlacklist(text, settings.blockedWords || [])
+
+    const audioBuffer = await generateTTS({
+      text,
+      voice: settings.ttsVoice || 'pt-BR-Standard-A',
+    })
+
+    const path = `tts/${alert.user.id}/${alert.id}.mp3`
+    const audioUrl = await uploadToBunny({ path, content: audioBuffer })
+
+    await prisma.alert.update({
+      where: { id: alertId },
+      data: { audioUrl, status: 'READY', readyAt: new Date() },
+    })
+
+    logger.info('TTS built successfully', { alertId, audioUrl })
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    logger.error('TTS build failed', { alertId, error: msg })
+
+    // Mark as READY without audio so the alert still shows
+    await prisma.alert.update({
+      where: { id: alertId },
+      data: { status: 'READY', readyAt: new Date(), lastError: msg },
+    })
+  }
 }
 
 /**
@@ -66,8 +116,10 @@ export async function handleDonationPaid(donationId: string) {
     return { donation, alert }
   })
 
-  // Trigger TTS build (non-blocking)
-  triggerTTSBuild(result.alert.id).catch(console.error)
+  // Build TTS audio (non-blocking, alert shows even if TTS fails)
+  buildTTSForAlert(result.alert.id).catch((err) => {
+    logger.error('TTS build trigger failed', { alertId: result.alert.id, error: String(err) })
+  })
 
   const { donation } = result
 
