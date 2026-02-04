@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import useSWR from 'swr'
+import { RotateCcw, Loader2, Check } from 'lucide-react'
 
 interface DonationMessage {
   id: string
@@ -211,6 +212,31 @@ function MessageRow({
   isExpanded: boolean
   onToggle: () => void
 }) {
+  const [replayState, setReplayState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const handleReplay = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (replayState === 'loading') return
+
+    setReplayState('loading')
+    try {
+      const res = await fetch('/api/private/alerts/replay-donation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ donationId: donation.id }),
+      })
+      if (!res.ok) throw new Error()
+      setReplayState('done')
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      timeoutRef.current = setTimeout(() => setReplayState('idle'), 3000)
+    } catch {
+      setReplayState('error')
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      timeoutRef.current = setTimeout(() => setReplayState('idle'), 3000)
+    }
+  }
+
   const truncatedMsg =
     donation.message.length > 60
       ? donation.message.slice(0, 60) + '...'
@@ -276,11 +302,36 @@ function MessageRow({
                 )}
               </div>
             )}
-            {donation.paidAt && (
-              <p className="text-xs text-zinc-500">
-                Pago em: {formatDate(donation.paidAt)}
-              </p>
-            )}
+            <div className="flex items-center gap-3 pt-1">
+              {donation.paidAt && (
+                <p className="text-xs text-zinc-500">
+                  Pago em: {formatDate(donation.paidAt)}
+                </p>
+              )}
+              {donation.paidAt && (
+                <button
+                  onClick={handleReplay}
+                  disabled={replayState === 'loading'}
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    replayState === 'done'
+                      ? 'bg-green-600/20 text-green-400 border border-green-500/30'
+                      : replayState === 'error'
+                        ? 'bg-red-600/20 text-red-400 border border-red-500/30'
+                        : 'bg-violet-600/20 text-violet-300 border border-violet-500/30 hover:bg-violet-600/30'
+                  }`}
+                >
+                  {replayState === 'loading' ? (
+                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Enviando...</>
+                  ) : replayState === 'done' ? (
+                    <><Check className="w-3.5 h-3.5" /> Enviado!</>
+                  ) : replayState === 'error' ? (
+                    <>Erro ao retocar</>
+                  ) : (
+                    <><RotateCcw className="w-3.5 h-3.5" /> Retocar</>
+                  )}
+                </button>
+              )}
+            </div>
           </td>
         </tr>
       )}

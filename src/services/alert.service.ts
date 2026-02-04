@@ -66,6 +66,23 @@ export const alertService = {
     })
   },
 
+  async replayDonation(userId: string, donationId: string) {
+    const existing = await prisma.alert.findFirst({
+      where: { userId, donationId, status: 'DONE' },
+      orderBy: { consumedAt: 'desc' },
+    })
+
+    return prisma.alert.create({
+      data: {
+        userId,
+        donationId,
+        status: existing?.audioUrl ? 'READY' : 'QUEUED',
+        audioUrl: existing?.audioUrl || null,
+        readyAt: existing?.audioUrl ? new Date() : null,
+      },
+    })
+  },
+
   async unlockExpiredAlerts() {
     const now = new Date()
     return prisma.alert.updateMany({
