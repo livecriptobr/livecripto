@@ -7,6 +7,7 @@ export const alertService = {
     const lockDuration = 60 * 1000 // 60 seconds
 
     // Use raw query for atomic lock
+    // Only pick up READY alerts (not QUEUED — TTS is still building)
     const alerts = await prisma.$queryRaw<Alert[]>`
       UPDATE "Alert"
       SET
@@ -17,7 +18,6 @@ export const alertService = {
         WHERE "userId" = ${userId}
           AND (
             status = 'READY'
-            OR status = 'QUEUED'
             OR (status = 'LOCKED' AND "lockExpiresAt" < ${now})
           )
         ORDER BY "createdAt" ASC
@@ -60,8 +60,9 @@ export const alertService = {
       data: {
         userId,
         donationId: last.donationId,
-        status: 'QUEUED',
+        status: last.audioUrl ? 'READY' : 'QUEUED',
         audioUrl: last.audioUrl,
+        readyAt: last.audioUrl ? new Date() : null,
       },
     })
   },
