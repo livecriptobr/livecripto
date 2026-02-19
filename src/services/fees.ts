@@ -30,12 +30,13 @@ export function calculateFee(amountCents: number, method: PaymentMethodType): Fe
 export function getPaymentMethodType(provider: string): PaymentMethodType {
   switch (provider.toUpperCase()) {
     case 'OPENPIX':
-    case 'MERCADOPAGO':
       return 'pix'
+    case 'MERCADOPAGO':
+      return 'card'
     case 'COINSNAP':
-      return 'crypto'
-    case 'NOWPAYMENTS':
       return 'lightning'
+    case 'NOWPAYMENTS':
+      return 'crypto'
     default:
       return 'pix'
   }

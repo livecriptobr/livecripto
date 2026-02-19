@@ -109,9 +109,55 @@ export async function getMonthlyWithdrawn(userId: string): Promise<number> {
   return result._sum.amountCents ?? 0
 }
 
+export interface MethodBalances {
+  pix: number
+  card: number
+  lightning: number
+  total: number
+}
+
+export async function getBalancesByMethod(userId: string): Promise<MethodBalances> {
+  // Sum donations received per method
+  const income = await prisma.transaction.groupBy({
+    by: ['paymentMethod'],
+    where: { userId, type: 'donation_received', status: 'completed' },
+    _sum: { netCents: true },
+  })
+
+  // Sum withdrawals per method
+  const withdrawn = await prisma.transaction.groupBy({
+    by: ['paymentMethod'],
+    where: { userId, type: 'withdrawal', status: 'completed' },
+    _sum: { netCents: true },
+  })
+
+  const incomeMap: Record<string, number> = {}
+  for (const row of income) {
+    if (row.paymentMethod) incomeMap[row.paymentMethod] = row._sum.netCents ?? 0
+  }
+
+  const withdrawnMap: Record<string, number> = {}
+  for (const row of withdrawn) {
+    if (row.paymentMethod) withdrawnMap[row.paymentMethod] = row._sum.netCents ?? 0
+  }
+
+  const pix = (incomeMap['pix'] ?? 0) - (withdrawnMap['pix'] ?? 0)
+  const card = (incomeMap['card'] ?? 0) - (withdrawnMap['card'] ?? 0)
+  const lightning = ((incomeMap['lightning'] ?? 0) + (incomeMap['crypto'] ?? 0))
+    - ((withdrawnMap['lightning'] ?? 0) + (withdrawnMap['crypto'] ?? 0))
+
+  return {
+    pix: Math.max(0, pix),
+    card: Math.max(0, card),
+    lightning: Math.max(0, lightning),
+    total: Math.max(0, pix + card + lightning),
+  }
+}
+
 export const walletService = {
   recordTransaction,
   getBalance,
+  getBalancesByMethod,
   getDailyWithdrawn,
   getMonthlyWithdrawn,
 }

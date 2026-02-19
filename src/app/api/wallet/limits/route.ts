@@ -22,10 +22,11 @@ export async function GET() {
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
-  const [dailyWithdrawn, monthlyWithdrawn, balance] = await Promise.all([
+  const [dailyWithdrawn, monthlyWithdrawn, balance, balances] = await Promise.all([
     walletService.getDailyWithdrawn(user.id),
     walletService.getMonthlyWithdrawn(user.id),
     walletService.getBalance(user.id),
+    walletService.getBalancesByMethod(user.id),
   ])
 
   return NextResponse.json({
@@ -41,5 +42,6 @@ export async function GET() {
     },
     minWithdraw: MIN_WITHDRAW_CENTS,
     balance,
+    balances,
   })
 }
